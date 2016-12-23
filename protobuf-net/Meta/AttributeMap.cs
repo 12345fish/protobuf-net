@@ -21,6 +21,12 @@ namespace ProtoBuf.Meta
             return TryGet(key, true, out value);
         }
         public abstract Type AttributeType { get; }
+
+        public static AttributeMap GetAttributeMap(Attribute attr)
+        {
+            return new ReflectionAttributeMap(attr);
+        }
+
         public static AttributeMap[] Create(TypeModel model, Type type, bool inherit)
         {
 #if FEAT_IKVM

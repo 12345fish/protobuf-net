@@ -38,7 +38,8 @@ namespace ProtoBuf.Meta
            OPTIONS_UseImplicitZeroDefaults = 32,
            OPTIONS_AllowParseableTypes = 64,
            OPTIONS_AutoAddProtoContractTypesOnly = 128,
-           OPTIONS_IncludeDateTimeKind = 256;
+           OPTIONS_IncludeDateTimeKind = 256,
+           OPTIONS_NOAttribute = 256;
         private bool GetOption(ushort option)
         {
             return (options & option) == option;
@@ -48,6 +49,33 @@ namespace ProtoBuf.Meta
             if (value) options |= option;
             else options &= (ushort)~option;
         }
+
+        System.Collections.Generic.Dictionary<Type, bool> TypeIsNoAttribute = new System.Collections.Generic.Dictionary<Type, bool>();
+
+        /// <summary>
+        /// 是否是空标签
+        /// </summary>
+        public bool IsNoAttribute(Type infoType)
+        {
+            if (TypeIsNoAttribute.ContainsKey(infoType))
+            {
+                return TypeIsNoAttribute[infoType];
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 设置是否是空标签
+        /// </summary>
+        /// <param name="infoType"></param>
+        /// <param name="b"></param>
+        public void SetNoAttribute(Type infoType, bool b)
+        {
+            TypeIsNoAttribute[infoType] = b;
+        }
+
+
         /// <summary>
         /// Global default that
         /// enables/disables automatic tag generation based on the existing name / order

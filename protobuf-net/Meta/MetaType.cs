@@ -15,6 +15,7 @@ using IKVM.Reflection.Emit;
 using System.Reflection;
 #if FEAT_COMPILER
 using System.Reflection.Emit;
+using System.Collections.Generic;
 #endif
 #endif
 
@@ -672,7 +673,12 @@ namespace ProtoBuf.Meta
             MemberInfo[] foundList = type.GetMembers(isEnum ? BindingFlags.Public | BindingFlags.Static
                 : BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 #endif
-                foreach (MemberInfo member in foundList)
+           
+           
+            int lengt = 0;
+            bool IsNotAbt = model.IsNoAttribute(this.type);
+
+            foreach (MemberInfo member in foundList)
             {
                 if (member.DeclaringType != type) continue;
                 if (member.IsDefined(model.MapType(typeof(ProtoIgnoreAttribute)), true)) continue;
@@ -705,7 +711,7 @@ namespace ProtoBuf.Meta
                     effectiveType = property.PropertyType;
                     isPublic = Helpers.GetGetMethod(property, false, false) != null;
                     isField = false;
-                    ApplyDefaultBehaviour_AddMembers(model, family, isEnum, partialMembers, dataMemberOffset, inferTagByName, implicitMode, members, member, ref forced, isPublic, isField, ref effectiveType, backingField);
+                    ApplyDefaultBehaviour_AddMembers(-1,model, family, isEnum, partialMembers, dataMemberOffset, inferTagByName, implicitMode, members, member, ref forced, isPublic, isField, ref effectiveType, backingField);
                 } else if ((field = member as FieldInfo) != null)
                 {
                     effectiveType = field.FieldType;
@@ -715,7 +721,8 @@ namespace ProtoBuf.Meta
                     { // only care about static things on enums; WinRT has a __value instance field!
                         continue;
                     }
-                    ApplyDefaultBehaviour_AddMembers(model, family, isEnum, partialMembers, dataMemberOffset, inferTagByName, implicitMode, members, member, ref forced, isPublic, isField, ref effectiveType);
+                    lengt++;
+                    ApplyDefaultBehaviour_AddMembers(IsNotAbt ? lengt : -1,model, family, isEnum, partialMembers, dataMemberOffset, inferTagByName, implicitMode, members, member, ref forced, isPublic, isField, ref effectiveType);
                 } else if ((method = member as MethodInfo) != null)
                 {
                     if (isEnum) continue;
@@ -765,7 +772,7 @@ namespace ProtoBuf.Meta
             }
         }
 
-        private static void ApplyDefaultBehaviour_AddMembers(TypeModel model, AttributeFamily family, bool isEnum, BasicList partialMembers, int dataMemberOffset, bool inferTagByName, ImplicitFields implicitMode, BasicList members, MemberInfo member, ref bool forced, bool isPublic, bool isField, ref Type effectiveType, MemberInfo backingMember = null)
+        private static void ApplyDefaultBehaviour_AddMembers(int Id, TypeModel model, AttributeFamily family, bool isEnum, BasicList partialMembers, int dataMemberOffset, bool inferTagByName, ImplicitFields implicitMode, BasicList members, MemberInfo member, ref bool forced, bool isPublic, bool isField, ref Type effectiveType, MemberInfo backingMember = null)
         {
             switch (implicitMode)
             {
@@ -785,7 +792,7 @@ namespace ProtoBuf.Meta
 #endif
             if (effectiveType != null)
             {
-                ProtoMemberAttribute normalizedAttribute = NormalizeProtoMember(model, member, family, forced, isEnum, partialMembers, dataMemberOffset, inferTagByName, backingMember);
+                ProtoMemberAttribute normalizedAttribute = NormalizeProtoMember(Id, model, member, family, forced, isEnum, partialMembers, dataMemberOffset, inferTagByName, backingMember);
                 if (normalizedAttribute != null) members.Add(normalizedAttribute);
             }
         }
@@ -798,11 +805,28 @@ namespace ProtoBuf.Meta
             return mi;
         }
 
+        internal static bool FindAttributeMap(AttributeMap map)
+        {
+            if (map.AttributeType == typeof(ProtoContractAttribute))
+                return true;
+            else
+                return false;
+        }
+
         internal static AttributeFamily GetContractFamily(RuntimeTypeModel model, Type type, AttributeMap[] attributes)
         {
             AttributeFamily family = AttributeFamily.None;
 
             if (attributes == null) attributes = AttributeMap.Create(model, type, false);
+
+            if (Array.Find<AttributeMap>(attributes, new Predicate<AttributeMap>(FindAttributeMap)) == null)
+            {
+                List<AttributeMap> tmplist = new List<AttributeMap>(attributes.Length);
+                tmplist.AddRange(attributes);
+                tmplist.Add(AttributeMap.GetAttributeMap(new ProtoContractAttribute()));
+                attributes = tmplist.ToArray();
+                model.SetNoAttribute(type, true);
+            }
 
             for (int i = 0; i < attributes.Length; i++)
             {
@@ -950,7 +974,7 @@ namespace ProtoBuf.Meta
             return (value & required) == required;
         }
         
-        private static ProtoMemberAttribute NormalizeProtoMember(TypeModel model, MemberInfo member, AttributeFamily family, bool forced, bool isEnum, BasicList partialMembers, int dataMemberOffset, bool inferByTagName, MemberInfo backingMember = null)
+        private static ProtoMemberAttribute NormalizeProtoMember(int Id, TypeModel model, MemberInfo member, AttributeFamily family, bool forced, bool isEnum, BasicList partialMembers, int dataMemberOffset, bool inferByTagName, MemberInfo backingMember = null)
         {
             if (member == null || (family == AttributeFamily.None && !isEnum)) return null; // nix
             int fieldNumber = int.MinValue, minAcceptFieldNumber = inferByTagName ? -1 : 1;
@@ -1079,7 +1103,14 @@ namespace ProtoBuf.Meta
             {
                 if (GetAttribute(attribs, "System.NonSerializedAttribute") != null) ignore = true;
             }
-            if (ignore || (fieldNumber < minAcceptFieldNumber && !forced)) return null;
+
+            if (ignore || (fieldNumber < minAcceptFieldNumber && !forced))
+            {
+                if (Id < 0)
+                    return null;
+                else
+                    fieldNumber = Id;
+            }
             ProtoMemberAttribute result = new ProtoMemberAttribute(fieldNumber, forced || inferByTagName);
             result.AsReference = asReference;
             result.AsReferenceHasValue = asReferenceHasValue;
